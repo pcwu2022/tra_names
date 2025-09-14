@@ -151,12 +151,22 @@ function addStationMarker(station) {
     circle.setAttribute('data-name', station.Name);
     circle.setAttribute('data-english', station.English || '');
     circle.setAttribute('data-daily', station.Daily);
-    // Tooltip on hover
+
+    // Native SVG tooltip
+    const title = svgMapEl.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = station.Name;
+    circle.appendChild(title);
+
+    // Custom tooltip on hover/click
     circle.addEventListener('mouseenter', function(e) {
         showTooltip(station, x, y);
     });
     circle.addEventListener('mouseleave', function(e) {
         hideTooltip();
+    });
+    circle.addEventListener('click', function(e) {
+        showTooltip(station, x, y);
+        e.stopPropagation();
     });
     stationMarkersGroup.appendChild(circle);
 }
