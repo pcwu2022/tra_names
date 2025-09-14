@@ -114,6 +114,8 @@ fetch('data/tra_data.json')
     .then(data => {
         stationData = data;
         overallDailyRidership = stationData.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0);
+        dataReady = true;
+        tryResumeGame();
     });
 
 // Helper: Find station by name (Chinese or English, case-insensitive)
@@ -335,12 +337,36 @@ document.getElementById('stationInput').addEventListener('keydown', function(e) 
 // Wait for SVG to load and initialize pan/zoom
 let svgMapEl = null; // reference to loaded SVG element
 let stationMarkersGroup = null; // reference to <g> for markers
+let svgReady = false;
+let dataReady = false;
 
+// Load TRA station data
+fetch('data/tra_data.json')
+    .then(res => res.json())
+    .then(data => {
+        stationData = data;
+        overallDailyRidership = stationData.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0);
+        dataReady = true;
+        tryResumeGame();
+    });
+
+// Wait for SVG to load and initialize pan/zoom
 window.addEventListener('DOMContentLoaded', () => {
     const obj = document.getElementById('taiwanSVG');
     obj.addEventListener('load', function() {
-        // Get loaded SVG element
+        // Detect SVG load failure and reload if necessary (max 3 times)
+        const reloadKey = 'svg_reload_count';
+        let reloadCount = parseInt(sessionStorage.getItem(reloadKey) || '0', 10);
+
         const svgDoc = obj.contentDocument;
+        if (reloadCount < 1) {
+            sessionStorage.setItem(reloadKey, reloadCount + 1);
+            location.reload();
+            return;
+        }
+        // Reset reload counter on success
+        sessionStorage.removeItem(reloadKey);
+
         svgMapEl = svgDoc.documentElement;
         // Add <g id="stationMarkers"> if not exists
         stationMarkersGroup = svgMapEl.getElementById('stationMarkers');
@@ -358,35 +384,40 @@ window.addEventListener('DOMContentLoaded', () => {
                 center: true
             });
         }
-        // Auto resume game if saved
-        const savedIDs = loadGame();
-        if (savedIDs.length > 0 && stationData.length > 0) {
-            // Only add restart button if not already present
-            if (!document.getElementById('restartBtn')) {
-                const btn = document.createElement('button');
-                btn.id = 'restartBtn';
-                btn.textContent = '重新開始';
-                btn.style.marginLeft = '8px';
-                btn.onclick = function() {
-                    if (confirm('確定要重新開始遊戲嗎？目前進度將會遺失。')) {
-                        clearGame();
-                        btn.remove();
-                    }
-                };
-                document.querySelector('.input-section').appendChild(btn);
-            }
-            // Restore guessed stations
-            guessedStations = savedIDs.map(id => stationData.find(st => st.ID === id)).filter(Boolean);
-            // Add markers
-            guessedStations.forEach(st => addStationMarker(st));
-            updateGuessedList();
-            updateAnalysis();
-        }
+        svgReady = true;
+        tryResumeGame();
     });
 });
 
-// Load svg-pan-zoom library
+// Ensure resume/restore logic only runs when both SVG and data are ready
+function tryResumeGame() {
+    if (!svgReady || !dataReady) return;
+    const savedIDs = loadGame();
+    if (savedIDs.length > 0 && stationData.length > 0) {
+        // Only add restart button if not already present
+        if (!document.getElementById('restartBtn')) {
+            const btn = document.createElement('button');
+            btn.id = 'restartBtn';
+            btn.textContent = '重新開始';
+            btn.style.marginLeft = '8px';
+            btn.onclick = function() {
+                if (confirm('確定要重新開始遊戲嗎？目前進度將會遺失。')) {
+                    clearGame();
+                    btn.remove();
+                }
+            };
+            document.querySelector('.input-section').appendChild(btn);
+        }
+        // Restore guessed stations
+        guessedStations = savedIDs.map(id => stationData.find(st => st.ID === id)).filter(Boolean);
+        // Add markers
+        guessedStations.forEach(st => addStationMarker(st));
+        updateGuessedList();
+        updateAnalysis();
+    }
+}
+
+// Load svg-pan-zoom library (only once)
 const script = document.createElement('script');
 script.src = 'https://unpkg.com/svg-pan-zoom/dist/svg-pan-zoom.min.js';
-document.body.appendChild(script);
 document.body.appendChild(script);
