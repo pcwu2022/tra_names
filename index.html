@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
-    <title>TRA Station Guessing Game</title>
+    <title>臺鐵車站猜猜樂</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css" />
 </head>
@@ -10,17 +10,18 @@
     <div class="container">
         <div class="left-panel">
             <div class="input-section">
-                <input type="text" id="stationInput" placeholder="Enter TRA station name..." />
-                <button id="guessBtn">Guess</button>
+                <input type="text" id="stationInput" placeholder="臺鐵車站，例如：臺北" />
+                <button id="guessBtn">&#x1F50D;</button><br><br>
             </div>
             <div class="guessed-list">
-                <h3>Guessed Stations</h3>
-                <ul id="guessedStations"></ul>
+                <h3>你的車站</h3>
+                <ol reversed id="guessedStations"></ol>
             </div>
             <div class="analysis-section">
-                <h3>Data Analysis</h3>
+                <h3>資料分析</h3>
                 <div id="analysis"></div>
             </div>
+            <div id="saved-info">資料已自動儲存於本機瀏覽器</div>
         </div>
         <div class="map-panel">
             <div class="svg-bg" style="position:relative;">

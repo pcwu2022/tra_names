@@ -8,6 +8,35 @@ const controlPoints = [
     { svg: [382, 1371], geo: [23.102314224470195, 120.03582350380297] }
 ];
 
+// Map lines to names
+const lineNames = {
+    A: "縱貫線北段",
+    T: "山線",
+    E: "宜蘭線",
+    M: "花東線",
+    V: "內灣線",
+    P: "屏東線",
+    J: "南迴線",
+    I: "北迴線",
+    N: "平溪線",
+    C: "集集線",
+    B: "沙崙線",
+    R: "深澳線"
+};
+
+function getLineName(id) {
+    const code = id ? id[0] : null;
+    if (code === "A") {
+        const twoDigits = parseFloat(id.slice(1, 3));
+        if (!isNaN(twoDigits)) {
+            if (twoDigits < 33) return "縱貫線北段";
+            else if (twoDigits < 49) return "海線";
+            else return "縱貫線南段";
+        }
+    }
+    return lineNames[code] || code;
+}
+
 // Helper: Affine transform from lat/lon to SVG coordinates
 function latLonToSvg(lat, lon) {
     // Solve affine transform using least squares
@@ -77,12 +106,14 @@ function latLonToSvg(lat, lon) {
 // Store station data and guessed stations
 let stationData = [];
 let guessedStations = [];
+let overallDailyRidership = 0;
 
 // Load TRA station data
 fetch('data/tra_data.json')
     .then(res => res.json())
     .then(data => {
         stationData = data;
+        overallDailyRidership = stationData.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0);
     });
 
 // Helper: Find station by name (Chinese or English, case-insensitive)
@@ -101,7 +132,7 @@ function addStationMarker(station) {
     const minRadius = 6;
     const maxRadius = 24;
     const minDaily = 100;
-    const maxDaily = 100000;
+    const maxDaily = 200000;
     let daily = parseInt(station.Daily) || minDaily;
     daily = Math.max(minDaily, Math.min(maxDaily, daily));
     const radius = minRadius + (maxRadius - minRadius) * (Math.log10(daily) - Math.log10(minDaily)) / (Math.log10(maxDaily) - Math.log10(minDaily));
@@ -144,7 +175,7 @@ function showTooltip(station, x, y) {
         tooltip.style.zIndex = 10;
         document.querySelector('.svg-bg').appendChild(tooltip);
     }
-    tooltip.innerHTML = `<b>${station.Name}</b><br>${station.English || ''}<br>Daily: ${station.Daily}`;
+    tooltip.innerHTML = `<b>${station.Name}</b><br>${station.English || ''}<br>每日進出人次：${station.Daily}`;
     // Position tooltip (SVG coords to px)
     if (!svgMapEl) return;
     const bbox = document.getElementById('taiwanSVG').getBoundingClientRect();
@@ -163,12 +194,12 @@ function hideTooltip() {
 
 // Update guessed stations list
 function updateGuessedList() {
-    const ul = document.getElementById('guessedStations');
-    ul.innerHTML = '';
+    const ol = document.getElementById('guessedStations');
+    ol.innerHTML = '';
     guessedStations.forEach(st => {
         const li = document.createElement('li');
         li.textContent = `${st.Name} (${st.English || ''})`;
-        ul.appendChild(li);
+        ol.insertBefore(li, ol.firstChild);
     });
 }
 
@@ -176,51 +207,121 @@ function updateGuessedList() {
 function updateAnalysis() {
     const analysis = document.getElementById('analysis');
     if (guessedStations.length === 0) {
-        analysis.innerHTML = '<em>No stations guessed yet.</em>';
+        analysis.innerHTML = '<em>尚未猜任何車站。</em>';
         return;
     }
-    const totalDaily = guessedStations.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0);
+    // 最大/最小車站
     const top5 = [...guessedStations].sort((a, b) => (b.Daily || 0) - (a.Daily || 0)).slice(0, 5);
     const bottom5 = [...guessedStations].sort((a, b) => (a.Daily || 0) - (b.Daily || 0)).slice(0, 5);
 
+    // 最佳路線
+    const lineCounts = {};
+    guessedStations.forEach(st => {
+        const line = getLineName(st.ID);
+        lineCounts[line] = (lineCounts[line] || 0) + 1;
+    });
+    const bestLines = Object.entries(lineCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([line, count]) => `${line} — ${count}`)
+        .slice(0, 5);
+
+    // 其他統計
+    const over20000 = guessedStations.filter(st => (parseInt(st.Daily) || 0) >= 20000).length;
+    const over5000 = guessedStations.filter(st => (parseInt(st.Daily) || 0) >= 5000).length;
+    const over1000 = guessedStations.filter(st => (parseInt(st.Daily) || 0) >= 1000).length;
+    const percent20000 = ((over20000 / stationData.filter(st => (parseInt(st.Daily) || 0) >= 20000).length) * 100).toFixed(1);
+    const percent5000 = ((over5000 / stationData.filter(st => (parseInt(st.Daily) || 0) >= 5000).length) * 100).toFixed(1);
+    const percent1000 = ((over1000 / stationData.filter(st => (parseInt(st.Daily) || 0) >= 1000).length) * 100).toFixed(1);
+
     analysis.innerHTML = `
-        <div>Stations Entered: <b>${guessedStations.length}</b></div>
-        <div>Total Daily Passengers: <b>${totalDaily.toLocaleString()}</b></div>
-        <div class="top-bottom-list">
-            <div>
-                <b>Largest 5 Stations</b>
-                <ul>
-                    ${top5.map(st => `<li>${st.Name} (${st.Daily})</li>`).join('')}
-                </ul>
-            </div>
-            <div>
-                <b>Smallest 5 Stations</b>
-                <ul>
-                    ${bottom5.map(st => `<li>${st.Name} (${st.Daily})</li>`).join('')}
-                </ul>
-            </div>
+        <div>已輸入：<b>${guessedStations.length}&nbsp;/&nbsp;${stationData.length} ( ${Math.round(guessedStations.length / stationData.length * 1000)/10}% )</b>&nbsp;站</div>
+        <div>總每日進出人次：<b>${guessedStations.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0).toLocaleString()} (${((guessedStations.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0) / stationData.reduce((sum, st) => sum + (parseInt(st.Daily) || 0), 0)) * 100).toFixed(1)}%)</b></div>
+        <br>
+        <div>
+            <b>最大車站</b>
+            <ul>
+                ${top5.map(st => `<li>${st.Name} (${st.English || ''}) <b>${st.Daily}</b></li>`).join('')}
+            </ul>
+        </div>
+        <div>
+            <b>最小車站</b>
+            <ul>
+                ${bottom5.map(st => `<li>${st.Name} (${st.English || ''}) <b>${st.Daily}</b></li>`).join('')}
+            </ul>
+        </div>
+        <div>
+            <b>最佳路線</b>
+            <ul>
+                ${bestLines.map(line => `<li>${line}</li>`).join('')}
+            </ul>
+        </div>
+        <div>
+            <b>其他統計</b>
+            <ul>
+                <li>每日進出人次 &ge; 20,000：${over20000} / ${stationData.filter(st => (parseInt(st.Daily) || 0) >= 20000).length} (${percent20000}%)</li>
+                <li>每日進出人次 &ge; 5,000：${over5000} / ${stationData.filter(st => (parseInt(st.Daily) || 0) >= 5000).length} (${percent5000}%)</li>
+                <li>每日進出人次 &ge; 1,000：${over1000} / ${stationData.filter(st => (parseInt(st.Daily) || 0) >= 1000).length} (${percent1000}%)</li>
+            </ul>
         </div>
     `;
+}
+
+// Input sanitization
+function sanitizeInput(name) {
+    let output = name.trim();
+    output = output
+        .replaceAll('台', '臺')
+        .replaceAll('車站', '')
+        .replaceAll('站', '');
+    return output;
+}
+
+// Save game state to localStorage
+function saveGame() {
+    // Save guessed station IDs to localStorage
+    localStorage.setItem('tra_guessed', JSON.stringify(guessedStations.map(st => st.ID)));
+}
+
+// Load game state from localStorage
+function loadGame() {
+    // Load guessed station IDs from localStorage
+    const ids = JSON.parse(localStorage.getItem('tra_guessed') || '[]');
+    return ids;
+}
+
+// Clear game state
+function clearGame() {
+    localStorage.removeItem('tra_guessed');
+    guessedStations = [];
+    // Remove markers from SVG
+    if (stationMarkersGroup) {
+        while (stationMarkersGroup.firstChild) {
+            stationMarkersGroup.removeChild(stationMarkersGroup.firstChild);
+        }
+    }
+    updateGuessedList();
+    updateAnalysis();
 }
 
 // Handle guess
 function handleGuess() {
     const input = document.getElementById('stationInput');
-    const name = input.value;
+    const name = sanitizeInput(input.value);
     if (!name) return;
     const station = findStation(name);
     if (!station) {
-        alert('Station not found. Please check the name.');
+        alert('查無此車站，請確認名稱是否正確。');
         return;
     }
     if (guessedStations.some(st => st.ID === station.ID)) {
-        alert('Already guessed!');
+        alert('此車站已猜過！');
         return;
     }
     guessedStations.push(station);
     addStationMarker(station);
     updateGuessedList();
     updateAnalysis();
+    saveGame();
     input.value = '';
 }
 
@@ -256,6 +357,30 @@ window.addEventListener('DOMContentLoaded', () => {
                 fit: true,
                 center: true
             });
+        }
+        // Auto resume game if saved
+        const savedIDs = loadGame();
+        if (savedIDs.length > 0 && stationData.length > 0) {
+            // Only add restart button if not already present
+            if (!document.getElementById('restartBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'restartBtn';
+                btn.textContent = '重新開始';
+                btn.style.marginLeft = '8px';
+                btn.onclick = function() {
+                    if (confirm('確定要重新開始遊戲嗎？目前進度將會遺失。')) {
+                        clearGame();
+                        btn.remove();
+                    }
+                };
+                document.querySelector('.input-section').appendChild(btn);
+            }
+            // Restore guessed stations
+            guessedStations = savedIDs.map(id => stationData.find(st => st.ID === id)).filter(Boolean);
+            // Add markers
+            guessedStations.forEach(st => addStationMarker(st));
+            updateGuessedList();
+            updateAnalysis();
         }
     });
 });
