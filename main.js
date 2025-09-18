@@ -223,8 +223,8 @@ function updateAnalysis() {
         return;
     }
     // 最大/最小車站
-    const top5 = [...guessedStations].sort((a, b) => (b.Daily || 0) - (a.Daily || 0)).slice(0, 5);
-    const bottom5 = [...guessedStations].sort((a, b) => (a.Daily || 0) - (b.Daily || 0)).slice(0, 5);
+    const top20 = [...guessedStations].sort((a, b) => (b.Daily || 0) - (a.Daily || 0)).slice(0, 20);
+    const bottom20 = [...guessedStations].sort((a, b) => (a.Daily || 0) - (b.Daily || 0)).slice(0, 20);
 
     // 最佳路線
     const lineCounts = {};
@@ -235,7 +235,7 @@ function updateAnalysis() {
     const bestLines = Object.entries(lineCounts)
         .sort((a, b) => b[1] - a[1])
         .map(([line, count]) => `${line} — ${count}`)
-        .slice(0, 5);
+        .slice(0, 20);
 
     // 其他統計
     const over20000 = guessedStations.filter(st => (parseInt(st.Daily) || 0) >= 20000).length;
@@ -251,19 +251,19 @@ function updateAnalysis() {
         <br>
         <div>
             <b>最大車站</b>
-            <ul>
-                ${top5.map(st => `<li>${st.Name} (${st.English || ''}) <b>${st.Daily}</b></li>`).join('')}
+            <ul class="rank">
+                ${top20.map(st => `<li>${st.Name} (${st.English || ''}) <b>${st.Daily}</b></li>`).join('')}
             </ul>
         </div>
         <div>
             <b>最小車站</b>
-            <ul>
-                ${bottom5.map(st => `<li>${st.Name} (${st.English || ''}) <b>${st.Daily}</b></li>`).join('')}
+            <ul class="rank">
+                ${bottom20.map(st => `<li>${st.Name} (${st.English || ''}) <b>${st.Daily}</b></li>`).join('')}
             </ul>
         </div>
         <div>
             <b>最佳路線</b>
-            <ul>
+            <ul class="rank">
                 ${bestLines.map(line => `<li>${line}</li>`).join('')}
             </ul>
         </div>

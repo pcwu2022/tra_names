@@ -233,3 +233,8 @@ body {
     color: #666;
     margin-bottom: 16px;
 }
+
+.rank {
+    max-height: 80px;
+    overflow: auto;
+}
